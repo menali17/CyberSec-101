@@ -1329,3 +1329,331 @@ For NTLM:
           |
           v
       Verification
+
+# Trees, Forests and Trusts
+
+A single Active Directory domain can be enough for a small or medium-sized organization.
+
+However, as an organization grows, it may become useful to divide the environment into multiple domains to improve administration, delegation, policy management, and organizational separation.
+
+---
+
+## Trees
+
+An **Active Directory Tree** is a collection of related domains that share a **contiguous DNS namespace**.
+
+For example:
+
+    thm.local
+       |
+       +-- uk.thm.local
+       |
+       +-- us.thm.local
+
+In this example:
+
+- `thm.local` is the root domain.
+- `uk.thm.local` is a child domain.
+- `us.thm.local` is another child domain.
+
+Each child domain has its own Active Directory database, users, computers, policies, and Domain Controllers.
+
+This allows different parts of an organization to be managed independently while still belonging to the same logical structure.
+
+---
+
+### Why Use Multiple Domains?
+
+Multiple domains can help when different parts of an organization have distinct administrative or regulatory requirements.
+
+For example:
+
+    thm.local
+       |
+       +-- uk.thm.local
+       |      |
+       |      +-- UK users
+       |      +-- UK computers
+       |      +-- UK policies
+       |
+       +-- us.thm.local
+              |
+              +-- US users
+              +-- US computers
+              +-- US policies
+
+The IT team responsible for the UK domain can manage UK resources without automatically having administrative control over the US domain.
+
+This provides stronger administrative separation than simply creating additional OUs inside a single domain.
+
+---
+
+## Domain Admins and Enterprise Admins
+
+Each domain has its own **Domain Admins** group.
+
+Members of Domain Admins have administrative privileges within their respective domain.
+
+For example:
+
+    UK Domain Admin
+        |
+        v
+    uk.thm.local
+
+    US Domain Admin
+        |
+        v
+    us.thm.local
+
+An additional privileged group exists at the forest level:
+
+    Enterprise Admins
+
+**Enterprise Admins** have administrative capabilities across the domains in the forest.
+
+A simplified comparison is:
+
+| Group | Administrative Scope |
+|---|---|
+| **Domain Admins** | A specific domain |
+| **Enterprise Admins** | Entire forest |
+
+Because Enterprise Admins have extremely broad privileges, membership in this group should be highly restricted.
+
+---
+
+## Forests
+
+An **Active Directory Forest** is the highest-level logical structure in Active Directory.
+
+A forest can contain one or more **domain trees**, including trees that use different DNS namespaces.
+
+For example, suppose two companies have their own Active Directory environments:
+
+    thm.local
+       |
+       +-- uk.thm.local
+       +-- us.thm.local
+
+and:
+
+    mht.local
+       |
+       +-- eu.mht.local
+       +-- asia.mht.local
+
+If these domain trees become part of the same Active Directory forest, the structure could conceptually look like:
+
+    Forest
+      |
+      +-- thm.local
+      |      |
+      |      +-- uk.thm.local
+      |      +-- us.thm.local
+      |
+      +-- mht.local
+             |
+             +-- eu.mht.local
+             +-- asia.mht.local
+
+The trees do not need to share the same DNS namespace.
+
+Therefore:
+
+    Tree
+      -> Domains sharing a related namespace
+
+    Forest
+      -> One or more domain trees
+
+---
+
+## Trust Relationships
+
+Multiple domains often need to allow users from one domain to access resources located in another domain.
+
+This is made possible through **trust relationships**.
+
+A trust relationship establishes a mechanism that allows authentication information from one domain to be accepted by another domain.
+
+However, a trust does **not automatically grant access to resources**.
+
+It only makes cross-domain authorization possible.
+
+Actual access still depends on permissions assigned to users and groups.
+
+---
+
+### One-Way Trust
+
+In a **one-way trust**, one domain trusts another domain.
+
+If:
+
+    Domain AAA trusts Domain BBB
+
+then identities from:
+
+    Domain BBB
+
+can potentially be authorized to access resources in:
+
+    Domain AAA
+
+The important detail is that the **trust direction is opposite to the access direction**.
+
+Conceptually:
+
+    AAA ---- trusts ----> BBB
+
+    AAA <--- access ----- BBB users
+
+In other words:
+
+    AAA trusts BBB
+           |
+           v
+    AAA accepts authentication
+    originating from BBB
+
+This allows administrators in AAA to assign permissions on AAA resources to identities from BBB.
+
+---
+
+### Two-Way Trust
+
+A **two-way trust** means that both domains trust each other.
+
+For example:
+
+    Domain AAA <------> Domain BBB
+
+This allows:
+
+    AAA users -> potentially access BBB resources
+
+and:
+
+    BBB users -> potentially access AAA resources
+
+provided that the appropriate permissions are explicitly granted.
+
+Domains created within the same Active Directory tree or forest typically have automatic trust relationships between them.
+
+---
+
+## Trust Does Not Mean Access
+
+A trust relationship should not be interpreted as:
+
+    "Everyone in the other domain can access everything."
+
+Instead, it means:
+
+    "Users from the trusted domain can now be considered
+     when assigning permissions."
+
+For example:
+
+    THM UK User
+          |
+          | authentication accepted through trust
+          v
+    MHT EU Domain
+          |
+          | permission check
+          v
+    Shared Folder
+          |
+          +-- Allowed -> access granted
+          |
+          +-- Not Allowed -> access denied
+
+Authentication and authorization are therefore still separate concepts.
+
+The trust enables the cross-domain authentication relationship, while permissions determine what the authenticated identity can actually access.
+
+---
+
+## Active Directory Hierarchy
+
+A simplified hierarchy can be represented as:
+
+    Forest
+      |
+      +-- Tree
+      |    |
+      |    +-- Domain
+      |    |
+      |    +-- Child Domain
+      |
+      +-- Tree
+           |
+           +-- Domain
+           |
+           +-- Child Domain
+
+Within each domain:
+
+    Domain
+      |
+      +-- OUs
+      |    |
+      |    +-- Users
+      |    +-- Computers
+      |
+      +-- Groups
+      +-- GPOs
+      +-- Domain Controllers
+
+Trust relationships allow identities from different domains to interact across these boundaries when appropriate.
+
+---
+
+## Tree vs Forest vs Trust
+
+| Concept | Purpose |
+|---|---|
+| **Domain** | Administrative and authentication boundary containing AD objects |
+| **Tree** | Collection of domains sharing a contiguous DNS namespace |
+| **Forest** | Collection of one or more domain trees |
+| **Trust** | Relationship allowing identities from one domain to be recognized by another |
+
+### Mental Model
+
+A useful way to remember these concepts is:
+
+    Domain
+       |
+       | Multiple related domains
+       v
+     Tree
+       |
+       | Multiple trees
+       v
+    Forest
+
+While:
+
+    Trust
+      |
+      v
+    Connects authentication relationships
+    between domains
+
+For example:
+
+    Forest
+    |
+    +-- thm.local
+    |     |
+    |     +-- uk.thm.local
+    |     +-- us.thm.local
+    |
+    +-- mht.local
+          |
+          +-- eu.mht.local
+          +-- asia.mht.local
+
+Trust relationships allow users from these domains to be authorized to access resources across domain boundaries.
