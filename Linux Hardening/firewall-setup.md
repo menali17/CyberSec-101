@@ -1,0 +1,1358 @@
+# Firewall Setup
+
+The primary purpose of a firewall is to:
+
+```text
+Control and monitor network traffic
+```
+
+between different networks, systems, or network zones.
+
+A firewall can filter:
+
+```text
+Incoming traffic
+Outgoing traffic
+```
+
+according to predefined criteria such as:
+
+```text
+IP addresses
+Protocols
+Ports
+Firewall rules
+```
+
+This helps protect systems against unauthorized access, malicious traffic, and other network threats.
+
+---
+
+# Firewall Mental Model
+
+A simple way to understand a firewall is:
+
+```text
+NETWORK TRAFFIC
+      │
+      ▼
+   FIREWALL
+      │
+      ▼
+    RULES
+   /     \
+MATCH   NO MATCH
+ │
+ ▼
+ACTION
+```
+
+For example:
+
+```text
+Incoming TCP packet
+       │
+       ▼
+Destination port 22?
+       │
+      YES
+       │
+       ▼
+     ACCEPT
+```
+
+The firewall therefore decides what should happen to network traffic according to configured rules.
+
+---
+
+# Linux Firewall Architecture
+
+The material introduces two important concepts:
+
+```text
+Netfilter
+iptables
+```
+
+They are related, but they are not the same thing.
+
+## Netfilter
+
+`Netfilter` is the framework integrated into the Linux kernel that can intercept and modify network traffic.
+
+## iptables
+
+`iptables` is the command-line utility commonly used to configure firewall rules.
+
+Conceptually:
+
+```text
+iptables
+   │
+   │ configure rules
+   ▼
+Netfilter
+   │
+   │ processes traffic
+   ▼
+Linux Kernel
+```
+
+The material describes Netfilter as the kernel framework and `iptables` as the utility used to configure firewall rules.
+
+---
+
+# iptables
+
+`iptables` allows us to create rules that filter traffic based on criteria such as:
+
+```text
+Source IP
+Destination IP
+Source port
+Destination port
+Protocol
+Connection state
+```
+
+The material also mentions other Linux firewall solutions:
+
+```text
+nftables
+UFW
+firewalld
+```
+
+`nftables` provides a more modern firewall framework and syntax, while UFW provides a simpler interface for firewall configuration. FirewallD provides dynamic firewall management with concepts such as zones and services.
+
+---
+
+# Main iptables Components
+
+The material introduces five major concepts:
+
+```text
+Tables
+Chains
+Rules
+Matches
+Targets
+```
+
+Their relationship can be understood as:
+
+```text
+TABLE
+  │
+  ▼
+CHAIN
+  │
+  ▼
+RULE
+  │
+  ├── MATCH
+  │      │
+  │      ▼
+  └── TARGET
+```
+
+In other words:
+
+```text
+Table
+→ organizes rules by purpose
+
+Chain
+→ organizes rules by traffic flow
+
+Rule
+→ defines what should be checked
+
+Match
+→ defines the criteria
+
+Target
+→ defines what happens
+```
+
+---
+
+# Tables
+
+Tables organize firewall rules according to their purpose.
+
+The main tables presented in the material are:
+
+| Table    | Purpose                             | Built-in Chains                                 |
+| -------- | ----------------------------------- | ----------------------------------------------- |
+| `filter` | Filter network traffic              | INPUT, OUTPUT, FORWARD                          |
+| `nat`    | Modify source/destination addresses | PREROUTING, POSTROUTING                         |
+| `mangle` | Modify packet header fields         | PREROUTING, OUTPUT, INPUT, FORWARD, POSTROUTING |
+
+---
+
+# `filter` Table
+
+The:
+
+```text
+filter
+```
+
+table is used to decide whether traffic should be allowed or blocked.
+
+Typical questions include:
+
+```text
+Should we allow this SSH connection?
+
+Should we block this IP?
+
+Should TCP/8080 be reachable?
+
+Should this packet be forwarded?
+```
+
+Its main chains are:
+
+```text
+INPUT
+OUTPUT
+FORWARD
+```
+
+---
+
+# `nat` Table
+
+The:
+
+```text
+nat
+```
+
+table is used when packet addresses need to be modified.
+
+Its main chains presented by the material are:
+
+```text
+PREROUTING
+POSTROUTING
+```
+
+This table is associated with:
+
+```text
+NAT
+SNAT
+DNAT
+MASQUERADE
+```
+
+---
+
+# `mangle` Table
+
+The:
+
+```text
+mangle
+```
+
+table is used to modify packet header fields.
+
+The material associates it with:
+
+```text
+PREROUTING
+OUTPUT
+INPUT
+FORWARD
+POSTROUTING
+```
+
+---
+
+# `raw` Table
+
+The material additionally introduces:
+
+```text
+raw
+```
+
+which is used for special packet-processing options.
+
+Its built-in chains are:
+
+```text
+PREROUTING
+OUTPUT
+```
+
+---
+
+# Chains
+
+Chains organize firewall rules according to how traffic is being processed.
+
+There are:
+
+```text
+Built-in chains
+User-defined chains
+```
+
+The most important built-in chains to understand first are:
+
+```text
+INPUT
+OUTPUT
+FORWARD
+```
+
+---
+
+# INPUT
+
+`INPUT` handles traffic coming:
+
+```text
+TO our machine
+```
+
+Conceptually:
+
+```text
+Internet
+   │
+   │ incoming packet
+   ▼
+ INPUT
+   │
+   ▼
+Our Machine
+```
+
+For example, someone connecting to our SSH server:
+
+```text
+Remote Client
+     │
+     │ TCP/22
+     ▼
+   INPUT
+     │
+     ▼
+SSH Server
+```
+
+---
+
+# OUTPUT
+
+`OUTPUT` handles traffic generated by:
+
+```text
+our machine
+```
+
+Conceptually:
+
+```text
+Our Machine
+    │
+    │ outgoing packet
+    ▼
+  OUTPUT
+    │
+    ▼
+Internet
+```
+
+For example:
+
+```text
+Our Machine
+    │
+    │ HTTPS request
+    ▼
+  OUTPUT
+    │
+    ▼
+Web Server
+```
+
+---
+
+# FORWARD
+
+`FORWARD` handles traffic passing:
+
+```text
+THROUGH our machine
+```
+
+rather than traffic whose destination is the machine itself.
+
+Conceptually:
+
+```text
+Machine A
+    │
+    ▼
+Linux Router
+    │
+  FORWARD
+    │
+    ▼
+Machine B
+```
+
+This is particularly relevant when the Linux machine acts as:
+
+```text
+Router
+Gateway
+Firewall
+```
+
+The material describes INPUT, OUTPUT, and FORWARD as handling incoming, outgoing, and forwarded network traffic.
+
+---
+
+# PREROUTING
+
+`PREROUTING` processes packets:
+
+```text
+before the routing decision
+```
+
+The material explains that it can be used to modify the destination IP address of incoming packets before the routing table processes them.
+
+Conceptually:
+
+```text
+Packet arrives
+     │
+     ▼
+PREROUTING
+     │
+     ▼
+Routing decision
+```
+
+---
+
+# POSTROUTING
+
+`POSTROUTING` processes packets:
+
+```text
+after the routing decision
+```
+
+The material explains that it can modify the source IP address of outgoing packets after routing has occurred.
+
+Conceptually:
+
+```text
+Routing decision
+      │
+      ▼
+POSTROUTING
+      │
+      ▼
+Packet leaves
+```
+
+---
+
+# User-Defined Chains
+
+Besides built-in chains, we can create:
+
+```text
+user-defined chains
+```
+
+These help organize complex firewall configurations.
+
+For example, instead of placing many HTTP rules directly into `INPUT`, we could conceptually create:
+
+```text
+INPUT
+  │
+  ▼
+WEB_TRAFFIC
+  │
+  ├── HTTP rule
+  ├── HTTPS rule
+  └── other web rules
+```
+
+The material explains that user-defined chains can group related rules, such as rules for web servers or traffic destined for port 80.
+
+---
+
+# Rules
+
+A rule tells iptables:
+
+```text
+IF traffic matches these conditions
+THEN perform this action
+```
+
+Conceptually:
+
+```text
+IF
+protocol = TCP
+AND
+destination port = 22
+
+THEN
+ACCEPT
+```
+
+The material explains that rules are added to chains using:
+
+```text
+-A
+```
+
+followed by the chain name.
+
+---
+
+# Example Rule
+
+The material provides:
+
+```bash
+menali@htb[/htb]$ sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+```
+
+This rule is extremely useful for understanding the basic iptables syntax.
+
+---
+
+# Breaking Down the Rule
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+```
+
+means:
+
+```text
+sudo
+→ execute with elevated privileges
+
+iptables
+→ firewall configuration utility
+
+-A INPUT
+→ append the rule to the INPUT chain
+
+-p tcp
+→ match TCP traffic
+
+--dport 22
+→ match destination port 22
+
+-j ACCEPT
+→ send matching packets to the ACCEPT target
+```
+
+So we can read the command almost like English:
+
+> Append to INPUT a rule that accepts TCP traffic whose destination port is 22.
+
+---
+
+# Rule Mental Model
+
+```text
+Incoming Packet
+      │
+      ▼
+    INPUT
+      │
+      ▼
+Is protocol TCP?
+      │
+     YES
+      ▼
+Is destination port 22?
+      │
+     YES
+      ▼
+    ACCEPT
+```
+
+This is the core logic behind iptables.
+
+---
+
+# Matches
+
+A:
+
+```text
+match
+```
+
+defines the characteristics a packet must have for a rule to apply.
+
+The material introduces several matches.
+
+| Match                  | Meaning               |
+| ---------------------- | --------------------- |
+| `-p` / `--protocol`    | Protocol              |
+| `--dport`              | Destination port      |
+| `--sport`              | Source port           |
+| `-s` / `--source`      | Source IP             |
+| `-d` / `--destination` | Destination IP        |
+| `-m state`             | Connection state      |
+| `-m multiport`         | Multiple ports        |
+| `-m tcp`               | TCP-specific matching |
+| `-m udp`               | UDP-specific matching |
+| `-m string`            | Match specific string |
+| `-m limit`             | Rate limit            |
+| `-m conntrack`         | Connection tracking   |
+| `-m mark`              | Netfilter mark        |
+| `-m mac`               | MAC address           |
+| `-m iprange`           | IP range              |
+
+We do **not** need to memorize all of these immediately.
+
+---
+
+# Protocol Match
+
+To match TCP:
+
+```bash
+-p tcp
+```
+
+To match UDP:
+
+```bash
+-p udp
+```
+
+To match ICMP:
+
+```bash
+-p icmp
+```
+
+So:
+
+```text
+-p
+→ protocol
+```
+
+is one of the most important options to remember.
+
+---
+
+# Destination Port
+
+```bash
+--dport 22
+```
+
+means:
+
+```text
+Destination port
+→ 22
+```
+
+Remember:
+
+```text
+dport
+→ destination port
+```
+
+---
+
+# Source Port
+
+```bash
+--sport 12345
+```
+
+means:
+
+```text
+Source port
+→ 12345
+```
+
+Remember:
+
+```text
+sport
+→ source port
+```
+
+---
+
+# Source Address
+
+```bash
+-s 10.10.10.10
+```
+
+means:
+
+```text
+Source IP
+→ 10.10.10.10
+```
+
+So:
+
+```text
+-s
+→ source
+```
+
+---
+
+# Destination Address
+
+```bash
+-d 10.10.10.20
+```
+
+means:
+
+```text
+Destination IP
+→ 10.10.10.20
+```
+
+So:
+
+```text
+-d
+→ destination
+```
+
+---
+
+# Targets
+
+A:
+
+```text
+target
+```
+
+defines what happens when a packet matches a rule.
+
+Conceptually:
+
+```text
+MATCH
+  │
+  ▼
+TARGET
+```
+
+Common targets introduced by the material include:
+
+```text
+ACCEPT
+DROP
+REJECT
+LOG
+SNAT
+DNAT
+MASQUERADE
+REDIRECT
+MARK
+```
+
+---
+
+# ACCEPT
+
+```text
+ACCEPT
+```
+
+allows the packet to continue.
+
+```text
+Packet
+   │
+   ▼
+Rule matches
+   │
+   ▼
+ACCEPT
+   │
+   ▼
+Continue
+```
+
+---
+
+# DROP
+
+```text
+DROP
+```
+
+blocks the packet.
+
+Conceptually:
+
+```text
+Packet
+   │
+   ▼
+DROP
+   │
+   X
+```
+
+The packet is discarded.
+
+---
+
+# REJECT
+
+```text
+REJECT
+```
+
+also blocks the packet, but the material distinguishes it from DROP because an error response is sent back to the source.
+
+So:
+
+```text
+DROP
+→ block silently
+```
+
+versus:
+
+```text
+REJECT
+→ block + notify source
+```
+
+---
+
+# LOG
+
+```text
+LOG
+```
+
+records packet information in system logs.
+
+Conceptually:
+
+```text
+Packet
+   │
+   ▼
+LOG
+   │
+   ▼
+System log
+```
+
+This can help with monitoring and troubleshooting.
+
+---
+
+# SNAT
+
+`SNAT` modifies the:
+
+```text
+Source IP address
+```
+
+of a packet.
+
+Conceptually:
+
+```text
+Before:
+
+Source: 192.168.1.10
+Destination: Internet
+
+        │
+        ▼
+       SNAT
+        │
+        ▼
+
+After:
+
+Source: Public IP
+Destination: Internet
+```
+
+The material associates SNAT with translating private source addresses into public addresses.
+
+---
+
+# DNAT
+
+`DNAT` modifies the:
+
+```text
+Destination IP address
+```
+
+Conceptually:
+
+```text
+Packet
+Destination: Public IP
+        │
+        ▼
+       DNAT
+        │
+        ▼
+Destination: Internal Server
+```
+
+This can be used to forward traffic toward another system.
+
+---
+
+# MASQUERADE
+
+`MASQUERADE` is similar to SNAT but is described by the material as useful when the source address is not fixed.
+
+Conceptually:
+
+```text
+Dynamic external IP
+       │
+       ▼
+MASQUERADE
+       │
+       ▼
+NAT using current address
+```
+
+---
+
+# REDIRECT
+
+`REDIRECT` redirects packets to another:
+
+```text
+Port
+or
+IP address
+```
+
+according to the configured rule.
+
+---
+
+# MARK
+
+`MARK` adds or modifies a Netfilter mark associated with a packet.
+
+The mark can later be used for advanced processing such as routing decisions.
+
+For this module, remembering the existence of `MARK` is enough.
+
+---
+
+# `-j`
+
+One of the most important options is:
+
+```text
+-j
+```
+
+In a command such as:
+
+```bash
+-j ACCEPT
+```
+
+it specifies the target to which processing should jump.
+
+So:
+
+```text
+-j ACCEPT
+→ ACCEPT the matching packet
+```
+
+```text
+-j DROP
+→ DROP the matching packet
+```
+
+```text
+-j REJECT
+→ REJECT the matching packet
+```
+
+---
+
+# HTTP Example
+
+The material provides:
+
+```bash
+menali@htb[/htb]$ sudo iptables -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT
+```
+
+Breaking it down:
+
+```text
+-A INPUT
+→ add rule to incoming traffic
+
+-p tcp
+→ TCP packets
+
+-m tcp
+→ use TCP matching
+
+--dport 80
+→ destination port 80
+
+-j ACCEPT
+→ allow matching traffic
+```
+
+Therefore:
+
+```text
+Incoming TCP traffic
+       │
+       ▼
+Destination port 80?
+       │
+      YES
+       ▼
+     ACCEPT
+```
+
+---
+
+# How to Read an iptables Rule
+
+Instead of trying to memorize commands, we can read them from left to right.
+
+Take:
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+```
+
+Read:
+
+```text
+iptables
+
+-A INPUT
+→ For incoming traffic...
+
+-p tcp
+→ ...using TCP...
+
+--dport 22
+→ ...going to port 22...
+
+-j ACCEPT
+→ ...allow it.
+```
+
+So:
+
+> Allow incoming TCP traffic destined for port 22.
+
+This approach is much easier than memorizing the complete syntax.
+
+---
+
+# Packet Flow
+
+The three chains we should understand first are:
+
+```text
+                     ┌──── Our Machine
+                     │
+Internet ──► INPUT ──┤
+                     │
+                     └──── Application
+```
+
+For outgoing traffic:
+
+```text
+Our Machine
+     │
+     ▼
+   OUTPUT
+     │
+     ▼
+ Internet
+```
+
+For forwarded traffic:
+
+```text
+Network A
+    │
+    ▼
+Linux Machine
+    │
+ FORWARD
+    │
+    ▼
+Network B
+```
+
+---
+
+# Tables vs Chains vs Rules
+
+This distinction is essential.
+
+Think of:
+
+```text
+TABLE
+│
+│ category/purpose
+│
+▼
+CHAIN
+│
+│ traffic flow
+│
+▼
+RULE
+│
+│ condition
+│
+▼
+TARGET
+```
+
+Example:
+
+```text
+filter
+   │
+   ▼
+INPUT
+   │
+   ▼
+TCP destination port 22
+   │
+   ▼
+ACCEPT
+```
+
+Or:
+
+```text
+filter
+   │
+   ▼
+INPUT
+   │
+   ▼
+Source IP = malicious host
+   │
+   ▼
+DROP
+```
+
+---
+
+# Basic iptables Formula
+
+The examples in this section follow a very useful pattern:
+
+```bash
+iptables -A <CHAIN> <MATCHES> -j <TARGET>
+```
+
+For example:
+
+```bash
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+```
+
+Conceptually:
+
+```text
+iptables
+
+-A INPUT
+→ WHERE?
+
+-p tcp --dport 22
+→ WHAT TRAFFIC?
+
+-j ACCEPT
+→ WHAT SHOULD HAPPEN?
+```
+
+This is the most useful way to understand the syntax.
+
+---
+
+# Exercises Introduced by the Material
+
+The material proposes practicing operations such as:
+
+```text
+Block TCP/8080
+Allow TCP/8080
+
+Block a specific IP
+Allow a specific IP
+
+Block a protocol
+Allow a protocol
+
+Create a chain
+Forward traffic to a chain
+
+Delete a rule
+List existing rules
+```
+
+These exercises reinforce the relationship between:
+
+```text
+Chain
++
+Match
++
+Target
+```
+
+---
+
+# Quick Reference
+
+| Concept   | Meaning                                      |
+| --------- | -------------------------------------------- |
+| Netfilter | Linux kernel packet-processing framework     |
+| iptables  | Utility used to configure firewall rules     |
+| Table     | Organizes rules by purpose                   |
+| Chain     | Groups rules according to traffic processing |
+| Rule      | Defines matching criteria and action         |
+| Match     | Determines which packets match               |
+| Target    | Determines what happens                      |
+| INPUT     | Traffic entering our machine                 |
+| OUTPUT    | Traffic leaving our machine                  |
+| FORWARD   | Traffic passing through our machine          |
+| ACCEPT    | Allow packet                                 |
+| DROP      | Silently discard packet                      |
+| REJECT    | Block and notify source                      |
+| `-A`      | Append rule                                  |
+| `-p`      | Match protocol                               |
+| `--dport` | Destination port                             |
+| `--sport` | Source port                                  |
+| `-s`      | Source address                               |
+| `-d`      | Destination address                          |
+| `-j`      | Jump to target                               |
+
+---
+
+# What to Remember First
+
+We do not need to memorize every table, match, or target yet.
+
+The most important structure is:
+
+```text
+TABLE
+  ↓
+CHAIN
+  ↓
+RULE
+  ↓
+MATCH
+  ↓
+TARGET
+```
+
+The most important chains are:
+
+```text
+INPUT
+→ coming TO us
+
+OUTPUT
+→ going FROM us
+
+FORWARD
+→ passing THROUGH us
+```
+
+The most important targets are:
+
+```text
+ACCEPT
+→ allow
+
+DROP
+→ block silently
+
+REJECT
+→ block and respond
+```
+
+And the basic command structure is:
+
+```bash
+iptables -A <CHAIN> <MATCHES> -j <TARGET>
+```
+
+For example:
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+```
+
+means:
+
+```text
+Incoming
++
+TCP
++
+Port 22
++
+Allow
+```
+
+---
+
+## Key Takeaway
+
+**iptables allows us to define how Linux handles network traffic using tables, chains, rules, matches, and targets. The most important starting point is understanding that `INPUT` handles traffic coming to our machine, `OUTPUT` handles traffic generated by our machine, and `FORWARD` handles traffic passing through it. A rule identifies traffic using matches such as protocol, IP address, or port and then applies a target such as `ACCEPT`, `DROP`, or `REJECT`.**
